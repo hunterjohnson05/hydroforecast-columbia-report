@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.runofftracker.daily</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>/Users/hunterjohnson/Desktop/Claude Code/NWRFC obs scraper/run_daily.py</string>
+    </array>
+
+    <!-- Check every hour. The script's "already scraped today" guard ensures
+         it only actually scrapes once per day — all other runs exit immediately.
+         This survives sleep/wake cycles reliably, unlike StartCalendarInterval. -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <!-- Also fire once immediately when the plist loads (boot / re-install) -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>WorkingDirectory</key>
+    <string>/Users/hunterjohnson/Desktop/Claude Code/NWRFC obs scraper</string>
+
+    <!-- Log files must live outside ~/Desktop — launchd cannot open files
+         there for I/O redirection due to macOS sandboxing.
+         The Python scraper still writes its own logs to the project's logs/
+         folder via the logging module (which runs as Python, not launchd). -->
+    <key>StandardOutPath</key>
+    <string>/Users/hunterjohnson/Library/Logs/runofftracker/launchd.stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/hunterjohnson/Library/Logs/runofftracker/launchd.stderr.log</string>
+</dict>
+</plist>

@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+
+# Credentials
+.env
+NWRFC obs scraper/.env
+
+# Local database (rebuilt via setup.sh on each machine)
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Logs
+*.log
+logs/
+NWRFC obs scraper/logs/
+NWRFC obs scraper/daily_results/
+
+# Generated report outputs (produced by run_weekly.sh)
+scripts/results/
