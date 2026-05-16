@@ -25,6 +25,7 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 import requests
@@ -139,7 +140,7 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
     rfc_pct = [(v / lta_maf * 100) if v is not None else None for v in rfc_v]
 
     width = 0.4
-    fig, ax_l = plt.subplots(figsize=(15.6, 6.6))
+    fig, ax_l = plt.subplots(figsize=(13, 5.5))
     ax_r = ax_l.twinx()
 
     # Bars
@@ -156,33 +157,33 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
 
     # Data labels: % of normal above each line marker. Label every point on the
     # latest (rightmost) date plus every 3rd point earlier to avoid clutter.
+    # Stack HF (top) and RFC (bottom) labels above the highest of the two values,
+    # mirroring the 14-day boxplot label style.
     label_indices = set(range(0, n, 3)) | {n - 1}
     for xi, hp, rp in zip(x, hf_pct, rfc_pct):
         if xi not in label_indices:
             continue
+        top = max(v for v in [hp, rp] if v is not None)
         if hp is not None:
-            ax_r.annotate(f"{hp:.0f}%", xy=(xi, hp), xytext=(0, 6),
+            ax_r.annotate(f"HF:{hp:.0f}%", xy=(xi, top), xytext=(0, 22),
                           textcoords="offset points",
-                          ha="center", fontsize=7, color="#0d3b66", fontweight="bold")
+                          ha="center", fontsize=9, color="#0d3b66", fontweight="bold")
         if rp is not None:
-            # Offset RFC label downward so it doesn't overlap with HF
-            ax_r.annotate(f"{rp:.0f}%", xy=(xi, rp), xytext=(0, -10),
+            ax_r.annotate(f"RFC:{rp:.0f}%", xy=(xi, top), xytext=(0, 8),
                           textcoords="offset points",
-                          ha="center", fontsize=7, color="#a04000", fontweight="bold")
+                          ha="center", fontsize=9, color="#a04000", fontweight="bold")
 
-    # LTA reference line + annotation
+    # LTA reference line (label added to legend below, not annotated on chart)
     ax_r.axhline(100, linestyle="--", color="gray", linewidth=1.0, alpha=0.7)
-    ax_r.text(n - 0.4, 100.5, f"LTA ({lta_maf:.1f} MAF)",
-              fontsize=8, color="gray", ha="right", va="bottom")
 
     # Axes
-    ax_l.set_xlabel("Forecast Issue Date")
-    ax_l.set_ylabel(f"{season_label} Volume (MAF)", color="#1f77b4")
-    ax_r.set_ylabel("% of Normal", color="#a04000")
-    ax_l.tick_params(axis="y", colors="#1f77b4")
-    ax_r.tick_params(axis="y", colors="#a04000")
+    ax_l.set_xlabel("Forecast Issue Date", fontsize=12)
+    ax_l.set_ylabel(f"{season_label} Volume (MAF)", color="#1f77b4", fontsize=12)
+    ax_r.set_ylabel("% of Normal", color="#a04000", fontsize=12)
+    ax_l.tick_params(axis="y", colors="#1f77b4", labelsize=11)
+    ax_r.tick_params(axis="y", colors="#a04000", labelsize=11)
     ax_l.set_xticks(x)
-    ax_l.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
+    ax_l.set_xticklabels(labels, rotation=45, ha="right", fontsize=10)
     ax_l.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:.1f}"))
     ax_l.grid(axis="y", alpha=0.3)
     ax_l.spines["top"].set_visible(False)
@@ -192,15 +193,21 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
     ax_l.set_ylim(0, lta_maf * 1.2)
     ax_r.set_ylim(0, 120)
 
-    # Combined legend
+    # Combined legend — above the plot, LTA entry added manually
     h1, l1 = ax_l.get_legend_handles_labels()
     h2, l2 = ax_r.get_legend_handles_labels()
-    ax_l.legend(h1 + h2, l1 + l2, loc="upper left", fontsize=8, ncols=2, frameon=True)
+    lta_handle = Line2D([0], [0], color="gray", linestyle="--", linewidth=1.0,
+                        label=f"LTA ({lta_maf:.1f} MAF)")
+    ax_l.legend(
+        h1 + h2 + [lta_handle], l1 + l2 + [lta_handle.get_label()],
+        loc="upper center", bbox_to_anchor=(0.5, 1.18),
+        ncols=3, fontsize=10, frameon=True,
+    )
 
     fig.suptitle(f"The Dalles — {season_label} Forecast Evolution (Past {LOOKBACK_DAYS} Days)",
-                 fontsize=12)
+                 fontsize=15)
     fig.text(0.99, 0.01, f"Created {datetime.now().strftime('%Y-%m-%d')}",
-             ha="right", va="bottom", fontsize=8, color="gray")
+             ha="right", va="bottom", fontsize=10, color="gray")
 
     plt.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)

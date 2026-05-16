@@ -222,7 +222,7 @@ def plot_volume_forecasts(
     nwrfc_positions = [i + offset for i in range(len(all_labels))]
 
     fig, (ax_forecast, ax_obs) = plt.subplots(
-        2, 1, figsize=(16.8, 10.8), gridspec_kw={"height_ratios": [3, 1]}, sharex=False
+        2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [3, 1]}, sharex=False
     )
 
     # --- Forecast boxplot subplot ---
@@ -247,9 +247,10 @@ def plot_volume_forecasts(
         label=f"Hist. Mean ({historical_mean_maf:.1f} MAF)",
     )
     ax_forecast.set_ylim(y_min, y_max)
-    ax_forecast.set_ylabel(f"{season_label} Volume (MAF)")
+    ax_forecast.set_ylabel(f"{season_label} Volume (MAF)", fontsize=12)
     ax_forecast.set_xticks(range(len(all_labels)))
-    ax_forecast.set_xticklabels(all_labels, rotation=45, ha="right")
+    ax_forecast.set_xticklabels(all_labels, rotation=45, ha="right", fontsize=11)
+    ax_forecast.tick_params(axis="y", labelsize=11)
     ax_forecast.grid(axis="y", alpha=0.3)
     ax_forecast.legend(
         handles=[
@@ -287,7 +288,7 @@ def plot_volume_forecasts(
                 "\n".join(annotation_lines),
                 ha="center",
                 va="bottom",
-                fontsize=7,
+                fontsize=9,
                 color="black",
             )
 
@@ -300,15 +301,16 @@ def plot_volume_forecasts(
     for pos, lbl, val in zip(obs_positions, obs_labels, obs_values):
         pct = pct_avg_by_label.get(lbl)
         if pct is not None:
-            ax_obs.text(pos, val + obs_y_max * 0.02, f"{pct:.0f}%", ha="center", va="bottom", fontsize=8)
-    ax_obs.set_ylabel("Observed\nVol (MAF)")
+            ax_obs.text(pos, val + obs_y_max * 0.02, f"{pct:.0f}%", ha="center", va="bottom", fontsize=10)
+    ax_obs.set_ylabel("Observed\nVol (MAF)", fontsize=12)
     ax_obs.set_xticks(range(len(all_labels)))
-    ax_obs.set_xticklabels(all_labels, rotation=45, ha="right")
-    ax_obs.set_xlabel("Forecast Issue Date")
+    ax_obs.set_xticklabels(all_labels, rotation=45, ha="right", fontsize=11)
+    ax_obs.set_xlabel("Forecast Issue Date", fontsize=12)
+    ax_obs.tick_params(axis="y", labelsize=11)
     ax_obs.grid(axis="y", alpha=0.3)
 
-    fig.suptitle(f"{season_label} Volume Forecast Evolution - Past 2 Weeks\n{site_id}", fontsize=13)
-    fig.text(0.99, 0.99, f"Created {datetime.now().strftime('%Y-%m-%d')}", ha="right", va="top", fontsize=9, color="gray")
+    fig.suptitle(f"{season_label} Volume Forecast Evolution - Past 2 Weeks\n{site_id}", fontsize=16)
+    fig.text(0.99, 0.99, f"Created {datetime.now().strftime('%Y-%m-%d')}", ha="right", va="top", fontsize=10, color="gray")
     plt.tight_layout()
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
