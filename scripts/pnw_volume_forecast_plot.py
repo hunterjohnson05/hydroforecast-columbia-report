@@ -222,7 +222,7 @@ def plot_volume_forecasts(
     nwrfc_positions = [i + offset for i in range(len(all_labels))]
 
     fig, (ax_forecast, ax_obs) = plt.subplots(
-        2, 1, figsize=(14, 9), gridspec_kw={"height_ratios": [3, 1]}, sharex=False
+        2, 1, figsize=(16.8, 10.8), gridspec_kw={"height_ratios": [3, 1]}, sharex=False
     )
 
     # --- Forecast boxplot subplot ---

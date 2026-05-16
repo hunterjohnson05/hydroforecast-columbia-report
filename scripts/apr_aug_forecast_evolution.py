@@ -139,7 +139,7 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
     rfc_pct = [(v / lta_maf * 100) if v is not None else None for v in rfc_v]
 
     width = 0.4
-    fig, ax_l = plt.subplots(figsize=(13, 5.5))
+    fig, ax_l = plt.subplots(figsize=(15.6, 6.6))
     ax_r = ax_l.twinx()
 
     # Bars
