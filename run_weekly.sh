@@ -1,16 +1,17 @@
 #!/bin/bash
 # run_weekly.sh
-# One-shot runner for the HydroForecast weekly report.
+# One-shot runner for the HydroForecast weekly Columbia River report.
 #
 # Generates one HTML report containing BOTH season views (Apr-Aug and Apr-Sep)
 # with a top-level toggle to switch between them.
 #
+# On first run: prompts for your HydroForecast API key, installs Python
+# packages, and backfills the local database (~10 min). Subsequent runs
+# go straight to generating the report.
+#
 # Usage:
 #     ./run_weekly.sh                              # default Apr-Aug visible first
 #     ./run_weekly.sh --default-season apr-sep     # Apr-Sep visible first
-#
-# Reads UPSTREAM_API_KEY from "NWRFC obs scraper/.env".
-# Run ./setup.sh once before using this script on a new machine.
 
 set -e   # exit on first error
 
@@ -38,22 +39,58 @@ SCRAPER_DIR="$SCRIPT_DIR/NWRFC obs scraper"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
 PYTHON=python3
 
-# Load API key from scraper's .env
-if [ -f "$SCRAPER_DIR/.env" ]; then
-    set -a
-    source "$SCRAPER_DIR/.env"
-    set +a
+step() { printf "\n\033[1;34m== %s ==\033[0m\n" "$1"; }
+
+# ── First-run setup (skipped on subsequent runs) ──────────────────────────────
+
+ENV_FILE="$SCRAPER_DIR/.env"
+DB_FILE="$SCRAPER_DIR/runoff.db"
+
+if [ ! -f "$ENV_FILE" ]; then
+    step "First-time setup: API key"
+    echo ""
+    echo "Enter your HydroForecast API key."
+    echo "Find it in the HydroForecast dashboard under:"
+    echo "  Shared Regional → Pacific Northwest project → API Keys"
+    echo ""
+    printf "API key: "
+    read -r api_key
+    if [ -z "$api_key" ]; then
+        echo "ERROR: API key cannot be empty." >&2
+        exit 1
+    fi
+    echo "UPSTREAM_API_KEY=$api_key" > "$ENV_FILE"
+    echo "✓ API key saved."
 fi
 
+if [ ! -f "$DB_FILE" ]; then
+    step "First-time setup: Python packages"
+    "$PYTHON" -m pip install -r "$SCRIPT_DIR/requirements.txt" --quiet
+    echo "✓ Packages installed."
+
+    step "First-time setup: LTA normals (one-time NWRFC scrape)"
+    cd "$SCRAPER_DIR" && "$PYTHON" scrape_lta_normals.py TDAO3W
+    echo "✓ LTA normals cached."
+
+    step "First-time setup: database backfill (~10 min)"
+    echo "Fetching NWRFC runoff observations from Oct 1 of the current water year to today..."
+    cd "$SCRAPER_DIR" && "$PYTHON" backfill.py
+    echo "✓ Database ready."
+fi
+
+# ── Load API key ──────────────────────────────────────────────────────────────
+
+set -a; source "$ENV_FILE"; set +a
+
 if [ -z "$UPSTREAM_API_KEY" ]; then
-    echo "ERROR: UPSTREAM_API_KEY not set (expected in $SCRAPER_DIR/.env)" >&2
+    echo "ERROR: UPSTREAM_API_KEY not set in $ENV_FILE" >&2
     exit 1
 fi
 
 # pnw_volume_forecast_plot.py and apr_aug_forecast_evolution.py expect HF_API_KEY
 export HF_API_KEY="$UPSTREAM_API_KEY"
 
-step() { printf "\n\033[1;34m== %s ==\033[0m\n" "$1"; }
+# ── Weekly report ─────────────────────────────────────────────────────────────
 
 step "0/10 · backfill.py (catch up DB to today)"
 BACKFILL_START=$(date -v-14d +%Y-%m-%d)
@@ -91,4 +128,4 @@ cd "$SCRIPTS_DIR" && "$PYTHON" build_report.py --default-season "$DEFAULT_SEASON
 
 REPORT="$SCRIPTS_DIR/results/weekly_reports/weekly_report_$(date +%Y-%m-%d).html"
 printf "\n\033[1;32mDone.\033[0m  Report: %s\n" "$REPORT"
-
+open "$REPORT"
