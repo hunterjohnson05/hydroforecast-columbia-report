@@ -252,9 +252,18 @@ def make_chart(site_label: str, snap_rows: list[dict], init_date: date, out_path
 
     for bar, pct, obs in zip(bars_hf, hf_pct, obs_vals):
         sign  = "+" if pct >= 0 else ""
-        y_pos = bar.get_height() + 80 if pct >= 0 else obs - 600
-        va    = "bottom" if pct >= 0 else "top"
-        color = "white" if pct < 0 else "#1a4f7a"   # white inside bar; dark blue above
+        if pct >= 0:
+            # HF above observed: label sits above the bar in dark blue
+            y_pos = bar.get_height() + 80
+            va    = "bottom"
+            color = "#1a4f7a"
+        else:
+            # HF below observed: label anchored just inside the top of the blue bar
+            # so it always lands on the bar background (white text, readable).
+            # Previously used obs-600 which floats above the bar when the gap is large.
+            y_pos = bar.get_height() - 80
+            va    = "top"
+            color = "white"
         ax.text(bar.get_x() + bar.get_width() / 2, y_pos,
                 f"{sign}{pct:.1f}%", ha="center", va=va,
                 fontsize=8.5, color=color, fontweight="bold")
