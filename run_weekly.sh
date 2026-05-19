@@ -92,40 +92,46 @@ export HF_API_KEY="$UPSTREAM_API_KEY"
 
 # ── Weekly report ─────────────────────────────────────────────────────────────
 
-step "0/10 · backfill.py (catch up DB to today)"
+step "0/12 · backfill.py (catch up DB to today)"
 BACKFILL_START=$(date -v-14d +%Y-%m-%d)
 cd "$SCRAPER_DIR" && "$PYTHON" backfill.py --start "$BACKFILL_START"
 
-step "1/10 · forecast_comparison.py (HTML tables)"
+step "1/12 · forecast_comparison.py (HTML tables)"
 cd "$SCRAPER_DIR" && "$PYTHON" forecast_comparison.py
 
-step "2/10 · forecast_bar_chart.py (monthly init bar charts)"
+step "2/12 · forecast_bar_chart.py (monthly + Apr-1-season bar charts)"
 cd "$SCRAPER_DIR" && "$PYTHON" forecast_bar_chart.py
 
-step "3/10 · pnw_volume_forecast_plot.py (Apr-Aug boxplot)"
+step "3/12 · pnw_volume_forecast_plot.py (Apr-Aug boxplot)"
 cd "$SCRIPTS_DIR" && "$PYTHON" pnw_volume_forecast_plot.py --season apr-aug
 
-step "4/10 · pnw_volume_forecast_plot.py (Apr-Sep boxplot)"
+step "4/12 · pnw_volume_forecast_plot.py (Apr-Sep boxplot)"
 cd "$SCRIPTS_DIR" && "$PYTHON" pnw_volume_forecast_plot.py --season apr-sep
 
-step "5/10 · apr_aug_forecast_evolution.py (Apr-Aug LTA % chart)"
+step "5/12 · apr_aug_forecast_evolution.py (Apr-Aug 28-day LTA % chart)"
 cd "$SCRIPTS_DIR" && "$PYTHON" apr_aug_forecast_evolution.py --season apr-aug
 
-step "6/10 · apr_aug_forecast_evolution.py (Apr-Sep LTA % chart)"
+step "6/12 · apr_aug_forecast_evolution.py (Apr-Sep 28-day LTA % chart)"
 cd "$SCRIPTS_DIR" && "$PYTHON" apr_aug_forecast_evolution.py --season apr-sep
 
-step "7/10 · compute_daily_flow.py (refresh daily_kaf for any recent NULLs)"
+step "7/12 · apr_aug_forecast_evolution.py (Apr-Aug Apr-1→Today chart)"
+cd "$SCRIPTS_DIR" && "$PYTHON" apr_aug_forecast_evolution.py --season apr-aug --window season-to-date
+
+step "8/12 · apr_aug_forecast_evolution.py (Apr-Sep Apr-1→Today chart)"
+cd "$SCRIPTS_DIR" && "$PYTHON" apr_aug_forecast_evolution.py --season apr-sep --window season-to-date
+
+step "9/12 · compute_daily_flow.py (refresh daily_kaf for any recent NULLs)"
 cd "$SCRAPER_DIR" && "$PYTHON" compute_daily_flow.py
 
-step "8/10 · qq_lead_time.py (daily flow Q-Q scatter grid)"
+step "10/12 · qq_lead_time.py (daily flow Q-Q scatter grid)"
 cd "$SCRIPTS_DIR" && "$PYTHON" qq_lead_time.py
 
-step "9/10 · hydrograph.py (interactive Plotly daily-flow chart)"
+step "11/12 · hydrograph.py (interactive Plotly daily-flow chart)"
 cd "$SCRIPTS_DIR" && "$PYTHON" hydrograph.py
 
-step "10/10 · build_report.py (assemble weekly_report HTML, both seasons inside)"
+step "12/12 · build_report.py (assemble weekly_report HTML, both seasons inside)"
 cd "$SCRIPTS_DIR" && "$PYTHON" build_report.py --default-season "$DEFAULT_SEASON"
 
 REPORT="$SCRIPTS_DIR/results/weekly_reports/weekly_report_$(date +%Y-%m-%d).html"
-printf "\n\033[1;32mDone.\033[0m  Report: %s\n" "$REPORT"
+printf "\n\033[1;32mAll 12 steps done.\033[0m  Report: %s\n" "$REPORT"
 open "$REPORT"

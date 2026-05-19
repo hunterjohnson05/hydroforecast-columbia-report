@@ -32,15 +32,37 @@ MONTH_ORDER = list(MONTH_TITLES.keys())
 
 def bar_chart_sections() -> list[dict]:
     """
-    Auto-discover monthly init bar charts (*_init.png) in the bar_chart subfolder.
-    Returns one section dict per file, sorted chronologically by month.
+    Auto-discover bar charts in the bar_chart subfolder.
+    Returns one section dict per file; "Apr 1 → Today" always comes first,
+    followed by monthly init charts sorted chronologically.
+    Each dict includes 'tab_key' and 'tab_label' for the tab UI.
     """
     folder = RESULTS_DIR / "bar_chart"
     sections = []
-    for png in sorted(folder.glob("*_init.png"),
-                      key=lambda p: MONTH_ORDER.index(p.stem.split("_")[-2])
-                      if p.stem.split("_")[-2] in MONTH_ORDER else 99):
-        month_key = png.stem.split("_")[-2]
+
+    # "Apr 1 → Today" tab — always first if present
+    apr1_path = folder / "the_dalles_apr1_season_init.png"
+    if apr1_path.exists():
+        sections.append({
+            "title": "Cumulative Volume Comparison — The Dalles (Apr 1 Init, Season to Date)",
+            "description": (
+                "Grouped bar chart comparing observed (NWRFC), HydroForecast, and RFC cumulative "
+                "volumes at The Dalles from the April 1 initialization through today. "
+                "Each bar group is a weekly snapshot (7th, 14th, 21st, 28th of each month); "
+                "percent errors are labeled relative to observed."
+            ),
+            "img_path": apr1_path,
+            "tab_key":  "apr1-season",
+            "tab_label": "Apr 1 → Today",
+        })
+
+    # Monthly init charts (Apr, May, …) — exclude the apr1_season file
+    for png in sorted(
+        (p for p in folder.glob("*_init.png") if "apr1_season" not in p.name),
+        key=lambda p: MONTH_ORDER.index(p.stem.split("_")[-2])
+                      if p.stem.split("_")[-2] in MONTH_ORDER else 99,
+    ):
+        month_key  = png.stem.split("_")[-2]
         month_name = MONTH_TITLES.get(month_key, month_key.capitalize())
         sections.append({
             "title": f"Cumulative Volume Comparison — The Dalles ({month_name} 1 Init)",
@@ -49,27 +71,34 @@ def bar_chart_sections() -> list[dict]:
                 f"volumes at The Dalles from the {month_name} 1 initialization onward. "
                 f"Each bar group is a weekly snapshot; percent errors are labeled relative to observed."
             ),
-            "img_path": png,
+            "img_path":  png,
+            "tab_key":   month_key,
+            "tab_label": month_name,
         })
     return sections
 
 
-def evolution_tabs(season_label: str) -> list[dict]:
-    """Tab specs for the Apr–Aug / Apr–Sep forecast evolution section."""
+def evolution_tabs(season_label: str, season_slug: str) -> list[dict]:
+    """Tab specs for the Apr–Aug / Apr–Sep forecast evolution section.
+    Each dict includes a per-tab 'suffix_filter' used to pick the right PNG
+    from the shared subfolder, and a 'chart_kind' for sources attribution.
+    """
     return [
         {
-            "tab_id":   "tab-evo-14",
-            "tab_label": "14-Day Outlook",
+            "tab_id":       "tab-evo-14",
+            "tab_label":    "14-Day Outlook",
             "description": (
                 f"Boxplot showing how HydroForecast and NWRFC ESP Natural {season_label} total volume "
                 f"forecasts have evolved over the past 14 initialization dates. The lower panel "
                 f"shows observed cumulative volume to date as a percentage of normal."
             ),
-            "subfolder": "volume_forecast_plot",
+            "subfolder":     "volume_forecast_plot",
+            "suffix_filter": season_slug,            # e.g. "apr_aug" — unique subfolder, no conflict
+            "chart_kind":    "boxplot_14d",
         },
         {
-            "tab_id":   "tab-evo-28",
-            "tab_label": "28-Day Outlook",
+            "tab_id":       "tab-evo-28",
+            "tab_label":    "28-Day Outlook",
             "description": (
                 f"Bars show the {season_label} seasonal volume forecast (MAF) for HydroForecast and NWRFC "
                 f"ESP Natural over the past 28 daily initializations, with each value computed as "
@@ -77,7 +106,23 @@ def evolution_tabs(season_label: str) -> list[dict]:
                 f"percentage of the long-term average (LTA = NWRFC's published 1991-2020 30-year "
                 f"normal; same value used in the 14-Day Outlook tab), with the dashed reference at 100%."
             ),
-            "subfolder": "apr_aug_evolution",
+            "subfolder":     "apr_aug_evolution",
+            "suffix_filter": f"{season_slug}_evolution",  # e.g. "apr_aug_evolution"
+            "chart_kind":    "evolution_28d",
+        },
+        {
+            "tab_id":       "tab-evo-s2d",
+            "tab_label":    "Apr 1 → Today",
+            "description": (
+                f"Same dual-axis style as the 28-Day Outlook, but the x-axis runs from April 1 of "
+                f"the current year through today (capped at September 30). Bar width and label "
+                f"cadence scale dynamically as the season progresses. Each bar represents the "
+                f"forecast issued on that date, expressed as both MAF and % of the {season_label} "
+                f"long-term average."
+            ),
+            "subfolder":     "apr_aug_evolution",
+            "suffix_filter": f"apr1_to_date_{season_slug}",  # e.g. "apr1_to_date_apr_aug"
+            "chart_kind":    "evolution_28d",
         },
     ]
 
@@ -173,30 +218,31 @@ def sources_html(chart_kind: str) -> str:
 
 
 def _build_evolution_section(season_slug: str) -> str | None:
-    """Build the inner tabbed (14-day / 30-day) forecast-evolution section for one season.
-    Returns HTML or None if no PNGs exist for that season."""
+    """Build the inner tabbed (14-day / 28-day / Apr1→Today) forecast-evolution section
+    for one season. Returns HTML or None if no PNGs exist for that season."""
     season = parse_season(season_slug)
     season_label = season["label"]
     tab_buttons, tab_panels = [], []
-    for i, sec in enumerate(evolution_tabs(season_label)):
-        img_path = latest_png(sec["subfolder"], suffix_filter=season["slug"])
+    active_assigned = False
+    for sec in evolution_tabs(season_label, season["slug"]):
+        img_path = latest_png(sec["subfolder"], suffix_filter=sec["suffix_filter"])
         if img_path is None:
-            print(f"  WARNING: no PNG for {sec['subfolder']} ({season_label}) — skipping")
+            print(f"  WARNING: no PNG for {sec['tab_label']} ({season_label}) — skipping")
             continue
-        print(f"  {sec['subfolder']} ({season_label}): {img_path.name}")
-        active = " active" if i == 0 else ""
+        print(f"  {sec['tab_label']} ({season_label}): {img_path.name}")
+        active = " active" if not active_assigned else ""
+        active_assigned = True
         # Suffix tab IDs with season slug to keep them globally unique on the page
         unique_id = f"{sec['tab_id']}-{season['slug']}"
         tab_buttons.append(
             f'<button class="tab-btn{active}" data-tab="{unique_id}">{sec["tab_label"]}</button>'
         )
         src = embed_png(img_path)
-        chart_kind = "boxplot_14d" if sec["subfolder"] == "volume_forecast_plot" else "evolution_28d"
         tab_panels.append(f"""
     <div class="tab-panel{active}" id="{unique_id}">
       <p class="description">{sec['description']}</p>
       <div class="chart-wrap"><img src="{src}" alt="{sec['tab_label']}"></div>
-      {sources_html(chart_kind)}
+      {sources_html(sec['chart_kind'])}
     </div>""")
     if not tab_buttons:
         return None
@@ -248,15 +294,15 @@ def build_report(default_season: str = "apr-aug") -> Path:
         tab_buttons = []
         tab_panels = []
         for i, sec in enumerate(bar_secs):
-            month_key = sec["img_path"].stem.split("_")[-2]
-            month_name = MONTH_TITLES.get(month_key, month_key.capitalize())
+            tab_key   = sec["tab_key"]
+            tab_label = sec["tab_label"]
             active = " active" if i == 0 else ""
             tab_buttons.append(
-                f'<button class="tab-btn{active}" data-tab="tab-{month_key}">{month_name}</button>'
+                f'<button class="tab-btn{active}" data-tab="tab-{tab_key}">{tab_label}</button>'
             )
             src = embed_png(sec["img_path"])
             tab_panels.append(f"""
-    <div class="tab-panel{active}" id="tab-{month_key}">
+    <div class="tab-panel{active}" id="tab-{tab_key}">
       <p class="description">{sec['description']}</p>
       <div class="chart-wrap"><img src="{src}" alt="{sec['title']}"></div>
       {sources_html("bar_chart")}

@@ -128,7 +128,9 @@ def build_series(forecasts: list[dict], db_site_id: str, end_month: int) -> dict
 
 # ── Plot ──────────────────────────────────────────────────────────────────────
 def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
-         out_path: Path, season_label: str):
+         out_path: Path, season_label: str,
+         bar_width: float = 0.4, label_step: int = 3,
+         chart_title: str | None = None):
     labels = sorted(set(hf_vol) | set(rfc_vol),
                     key=lambda s: tuple(int(x) for x in s.split("/")))
     n = len(labels)
@@ -139,7 +141,7 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
     hf_pct  = [(v / lta_maf * 100) if v is not None else None for v in hf_v]
     rfc_pct = [(v / lta_maf * 100) if v is not None else None for v in rfc_v]
 
-    width = 0.4
+    width = bar_width
     fig, ax_l = plt.subplots(figsize=(13, 5.5))
     ax_r = ax_l.twinx()
 
@@ -155,11 +157,10 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
     ax_r.plot(x, rfc_pct, marker="o", linewidth=1.6,
               color="#a04000", label="RFC % of Normal")
 
-    # Data labels: % of normal above each line marker. Label every point on the
-    # latest (rightmost) date plus every 3rd point earlier to avoid clutter.
-    # Stack HF (top) and RFC (bottom) labels above the highest of the two values,
-    # mirroring the 14-day boxplot label style.
-    label_indices = set(range(0, n, 3)) | {n - 1}
+    # Data labels: % of normal above each line marker. Label every `label_step`-th
+    # point plus the rightmost date. Stack HF (top) and RFC (bottom) labels above
+    # the highest of the two values, mirroring the 14-day boxplot label style.
+    label_indices = set(range(0, n, label_step)) | {n - 1}
     for xi, hp, rp in zip(x, hf_pct, rfc_pct):
         if xi not in label_indices:
             continue
@@ -204,8 +205,8 @@ def plot(hf_vol: dict, rfc_vol: dict, lta_maf: float, site_id: str,
         ncols=3, fontsize=10, frameon=True,
     )
 
-    fig.suptitle(f"The Dalles — {season_label} Forecast Evolution (Past {LOOKBACK_DAYS} Days)",
-                 fontsize=15)
+    _title = chart_title or f"The Dalles — {season_label} Forecast Evolution (Past {LOOKBACK_DAYS} Days)"
+    fig.suptitle(_title, fontsize=15)
     fig.text(0.99, 0.01, f"Created {datetime.now().strftime('%Y-%m-%d')}",
              ha="right", va="bottom", fontsize=10, color="gray")
 
@@ -225,6 +226,9 @@ def main():
     parser.add_argument("--db-site",    default="TDAO3W")
     parser.add_argument("--season", choices=["apr-aug", "apr-sep"], default="apr-aug",
                         help="Seasonal window for cumulative volume + LTA (default: apr-aug)")
+    parser.add_argument("--window", choices=["rolling", "season-to-date"], default="rolling",
+                        help="rolling = past 28 days (default); "
+                             "season-to-date = Apr 1 of current year through today (capped Sep 30)")
     args = parser.parse_args()
 
     if not args.api_key:
@@ -234,17 +238,37 @@ def main():
     lta_maf = get_lta_maf(args.db_site, months=season["months"])
 
     today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    init_times = [(today - timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                  for i in range(LOOKBACK_DAYS - 1, -1, -1)]
 
-    print(f"Season: {season['label']}  ·  LTA = {lta_maf:.2f} MAF "
+    if args.window == "season-to-date":
+        year = today.year
+        start_dt = datetime(year, 4, 1, tzinfo=UTC)
+        end_dt   = min(today, datetime(year, 9, 30, tzinfo=UTC))
+        if today < start_dt:
+            print("Season-to-date window hasn't started (before April 1) — skipping.")
+            return
+        n_days    = (end_dt - start_dt).days + 1
+        init_times = [(start_dt + timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                      for i in range(n_days)]
+        bar_width  = max(0.12, 0.5 * (28 / n_days))
+        label_step = max(3, round(n_days / 8))
+        chart_title = f"The Dalles — {season['label']} Forecast Evolution (Apr 1 → Today)"
+        out_path = RESULTS_DIR / f"the_dalles_apr1_to_date_{season['slug']}_{date_today_str()}.png"
+    else:
+        # rolling window (default)
+        init_times  = [(today - timedelta(days=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                       for i in range(LOOKBACK_DAYS - 1, -1, -1)]
+        bar_width   = 0.4
+        label_step  = 3
+        chart_title = None  # plot() will use its default title
+        out_path = RESULTS_DIR / f"the_dalles_{season['slug']}_evolution_{date_today_str()}.png"
+
+    print(f"Season: {season['label']}  ·  Window: {args.window}  ·  LTA = {lta_maf:.2f} MAF "
           f"(via lta.py, site {args.db_site})")
-
-    print(f"Fetching {LOOKBACK_DAYS} days of HF forecasts …")
+    print(f"Fetching {len(init_times)} days of HF forecasts …")
     hf_fc  = fetch_forecasts(args.api_key, args.site_id, args.project_id,
                              "hydroforecast-seasonal", init_times,
                              source_metadata={"modelGeneration": "Seasonal-3"})
-    print(f"Fetching {LOOKBACK_DAYS} days of RFC forecasts …")
+    print(f"Fetching {len(init_times)} days of RFC forecasts …")
     rfc_fc = fetch_forecasts(args.api_key, args.site_id, args.project_id,
                              "nwrfc-esp-natural", init_times)
 
@@ -252,9 +276,9 @@ def main():
     rfc_vol = build_series(rfc_fc, args.db_site, end_month=season["end_month"])
     print(f"HF: {len(hf_vol)} forecasts, RFC: {len(rfc_vol)} forecasts")
 
-    out_path = RESULTS_DIR / f"the_dalles_{season['slug']}_evolution_{date_today_str()}.png"
     plot(hf_vol, rfc_vol, lta_maf, args.site_id, out_path,
-         season_label=season["label"])
+         season_label=season["label"],
+         bar_width=bar_width, label_step=label_step, chart_title=chart_title)
 
 
 def date_today_str() -> str:

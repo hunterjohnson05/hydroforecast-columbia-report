@@ -226,7 +226,8 @@ def get_latest_obs_date(db_site_id: str) -> date:
 
 
 # ── Chart ──────────────────────────────────────────────────────────────────────
-def make_chart(site_label: str, snap_rows: list[dict], init_date: date, out_path: Path) -> None:
+def make_chart(site_label: str, snap_rows: list[dict], init_date: date, out_path: Path,
+               title: str | None = None) -> None:
     labels   = [s["label"] for s in snap_rows]
     obs_vals = [s["obs"]   for s in snap_rows]
     hf_vals  = [s["hf"]    for s in snap_rows]
@@ -274,9 +275,9 @@ def make_chart(site_label: str, snap_rows: list[dict], init_date: date, out_path
     ax.set_xticks(x)
     ax.set_xticklabels(labels, fontsize=11)
     ax.set_ylabel(f"Cumulative Volume from {init_label} (TAF)", fontsize=10)
-    ax.set_title(f"{site_label} — Cumulative Volume Forecast Comparison\n"
-                 f"{init_label} initialization",
-                 fontsize=10, pad=12)
+    _title = title or (f"{site_label} — Cumulative Volume Forecast Comparison\n"
+                       f"{init_label} initialization")
+    ax.set_title(_title, fontsize=10, pad=12)
     ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:,.0f}"))
     # Include hf_vals when computing y-limit so positive HF errors stay below the title.
     max_val = max(rfc_vals + obs_vals + hf_vals) if (rfc_vals or obs_vals or hf_vals) else 1
@@ -365,6 +366,50 @@ def main():
             slug     = label.lower().replace(" ", "_")
             out_path = OUT_DIR / f"{slug}_{month_name}_init.png"
             make_chart(label, snap_rows, init_date, out_path)
+
+        # ── Apr 1 Season chart (fixed Apr 1 init, all snapshots Apr 1 → today) ──
+        today_date = date.today()
+        if today_date >= date(args.year, 4, 1):
+            apr1_init   = date(args.year, 4, 1)
+            apr1_iso    = f"{apr1_init.isoformat()}T00:00:00.000Z"
+            accum_start = apr1_init - timedelta(days=1)
+            baseline_apr1 = get_obs_baseline(db_site_id, accum_start)
+
+            print(f"\n  [Apr 1 Season chart]  {apr1_init} init  "
+                  f"(baseline obs = {baseline_apr1:,.0f} TAF, obs through {period_end})")
+            print(f"  Calling API …")
+
+            resp_apr1    = call_api(api_site_id, project_id, apr1_iso)
+            results_apr1 = resp_apr1.get("data", [])
+            if len(results_apr1) >= 2:
+                rfc_daily_apr1 = parse_daily_cfs(results_apr1[0])
+                hf_daily_apr1  = parse_daily_cfs(results_apr1[1])
+                # No month cap — snapshots span Apr 1 through latest obs date
+                obs_rows_apr1 = get_snapshot_obs(db_site_id, apr1_init, period_end)
+                if obs_rows_apr1:
+                    snap_rows_apr1 = []
+                    for obs_date_str, cumul_apr_to_date in obs_rows_apr1:
+                        snap_date = date.fromisoformat(obs_date_str)
+                        obs_val   = round(cumul_apr_to_date - baseline_apr1, 1)
+                        hf_val    = accumulate(hf_daily_apr1,  accum_start, snap_date)
+                        rfc_val   = accumulate(rfc_daily_apr1, accum_start, snap_date)
+                        d_label   = snap_date.strftime("%b %-d")
+                        snap_rows_apr1.append(
+                            {"label": d_label, "obs": obs_val, "hf": hf_val, "rfc": rfc_val}
+                        )
+                        print(f"    {obs_date_str}: obs={obs_val:,.0f}  "
+                              f"hf={hf_val:,.0f}  rfc={rfc_val:,.0f} TAF")
+                    slug     = label.lower().replace(" ", "_")
+                    out_path = OUT_DIR / f"{slug}_apr1_season_init.png"
+                    make_chart(
+                        label, snap_rows_apr1, apr1_init, out_path,
+                        title=(f"{label} — Apr 1 Init: Cumulative Volume Season to Date\n"
+                               f"Apr 1, {args.year} initialization · snapshots through {period_end}"),
+                    )
+                else:
+                    print("  WARNING: no observed data from Apr 1 — skipping Apr 1 Season chart")
+            else:
+                print("  WARNING: API returned fewer than 2 results for Apr 1 — skipping")
 
 
 if __name__ == "__main__":
