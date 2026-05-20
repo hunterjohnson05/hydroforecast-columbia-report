@@ -110,20 +110,6 @@ def evolution_tabs(season_label: str, season_slug: str) -> list[dict]:
             "suffix_filter": f"{season_slug}_evolution",  # e.g. "apr_aug_evolution"
             "chart_kind":    "evolution_28d",
         },
-        {
-            "tab_id":       "tab-evo-s2d",
-            "tab_label":    "Apr 1 → Today",
-            "description": (
-                f"Same dual-axis style as the 28-Day Outlook, but the x-axis runs from April 1 of "
-                f"the current year through today (capped at September 30). Bar width and label "
-                f"cadence scale dynamically as the season progresses. Each bar represents the "
-                f"forecast issued on that date, expressed as both MAF and % of the {season_label} "
-                f"long-term average."
-            ),
-            "subfolder":     "apr_aug_evolution",
-            "suffix_filter": f"apr1_to_date_{season_slug}",  # e.g. "apr1_to_date_apr_aug"
-            "chart_kind":    "evolution_28d",
-        },
     ]
 
 
