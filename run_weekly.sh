@@ -37,7 +37,14 @@ done
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SCRAPER_DIR="$SCRIPT_DIR/NWRFC obs scraper"
 SCRIPTS_DIR="$SCRIPT_DIR/scripts"
-PYTHON=python3
+
+# Use Anaconda Python (3.12) — the codebase requires 3.10+ for X|None type hints.
+# Fall back to python3 if Anaconda isn't present (e.g. colleague's machine).
+if [ -x "/opt/anaconda3/bin/python3" ]; then
+    PYTHON="/opt/anaconda3/bin/python3"
+else
+    PYTHON=python3
+fi
 
 step() { printf "\n\033[1;34m== %s ==\033[0m\n" "$1"; }
 
